@@ -21,14 +21,23 @@ defmodule Integrations.Mesos do
 
 
   ## Public API
+  @doc """
+  Returns all Mesos frameworks.
+  """
   def get_frameworks do
     GenServer.call(Mesos, {:get_frameworks})
   end
 
+  @doc """
+  Returns all Mesos tasks.
+  """
   def get_tasks do
     GenServer.call(Mesos, {:get_tasks})
   end
 
+  @doc """
+  Returns all slaves
+  """
   def get_slaves do
     GenServer.call(Mesos, {:get_slaves})
   end

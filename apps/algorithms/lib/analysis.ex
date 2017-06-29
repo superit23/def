@@ -16,8 +16,6 @@ defmodule Algorithms.CHAnalysis do
   end
 
   def sort(n_keys) do
-
-
     eat = profile do
       keys = Enum.map(1..n_keys, &(:erlang.phash2("key" <> to_string(&1))))
       keys |> Enum.sort

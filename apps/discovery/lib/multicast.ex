@@ -1,12 +1,20 @@
 defmodule Discovery.Multicast do
   use GenServer
 
+  @moduledoc """
+  Uses multicast to discover other DEF nodes in the network. To reduce storming,
+  the nodes reply to its unicast address.
+  """
+
   @behaviour Discovery.Strategy
 
   @ucast_port 50000
   @mcast_port 49999
   @mcast_group {224,1,1,1}
 
+  @doc """
+  Initializes the discovery mechanism. Does not take any arguments.
+  """
   def start_link(_args \\ "") do
     GenServer.start_link(__MODULE__, :ok, [])
   end
@@ -26,7 +34,9 @@ defmodule Discovery.Multicast do
    {:ok, _socket} = :gen_udp.open(@mcast_port, udp_options)
   end
 
-
+  @doc """
+  Runs the discovery mechanism. Does not take any arguments.
+  """
   def discover(_args \\ %{}) do
     udp_options = [:binary, reuseaddr: true]
     {:ok, send_sock} = :gen_udp.open(0, udp_options)
