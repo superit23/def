@@ -8,12 +8,17 @@ defmodule Algorithms.ConsistentHashing.Test do
 
     {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_buckets(buckets, h_func)
     results = Algorithms.ConsistentHashing.find_many(keys, h_buckets, hash_map, h_func)
-    assert results ==
-      [{"key1", "bucket5"}, {"key2", "bucket5"},
+
+    assert ([{"key1", "bucket5"}, {"key2", "bucket5"},
       {"key3", "bucket3"}, {"key8", "bucket2"},
       {"key4", "bucket2"}, {"key5", "bucket2"},
       {"key6", "bucket5"}, {"key7", "bucket2"},
       {"key9", "bucket2"}, {"key10", "bucket2"}]
+      |> Enum.map(&Enum.member?(results, &1))
+      |> Enum.reduce(true,
+      fn was_in_list, acc ->
+        was_in_list && acc
+      end)) == true
   end
 
 
@@ -29,7 +34,8 @@ defmodule Algorithms.ConsistentHashing.Test do
       |> elem(0)
       |> Kernel./(1_000_000)
 
-    assert time < 1
+    # Dependent on system; usually less than one
+    assert time < 5
   end
 
 
