@@ -8,7 +8,7 @@ defmodule Algorithms.CHAnalysis do
 
     {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_buckets(buckets, h_func)
 
-    eat = profile do
+    _ = profile do
       Algorithms.ConsistentHashing.find_many(keys, h_buckets, hash_map, h_func)
     end
     {:ok}
@@ -16,10 +16,10 @@ defmodule Algorithms.CHAnalysis do
   end
 
   def sort(n_keys) do
-    eat = profile do
+    _ = profile do
       keys = Enum.map(1..n_keys, &(:erlang.phash2("key" <> to_string(&1))))
       keys |> Enum.sort
-      a_keys = :array.from_list(keys)
+      :array.from_list(keys)
     end
     {:ok}
   end
@@ -31,7 +31,7 @@ defmodule Algorithms.CHAnalysis do
     :ets.insert(ETSTable, {1, 124145142})
     IO.puts "#{Enum.at(:ets.lookup(ETSTable, 1), 0)}"
 
-    eat = profile do
+    _ = profile do
       keys |> Enum.each(&:ets.insert(table, &1))
     end
     {:ok}
@@ -48,7 +48,7 @@ defmodule Algorithms.CHAnalysis do
       Map.put(acc, idx, bucket)
     end)
 
-    eat = profile do
+    _ = profile do
       1..n_buckets |> Enum.map(&Map.get(bucket_map, &1))
     end
     {:ok}

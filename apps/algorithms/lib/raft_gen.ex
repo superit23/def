@@ -1,4 +1,4 @@
-defmodule Algorithms.Raft do
+defmodule Algorithms.RaftGen do
   ## States:
   ## Follower
   ## Candidate
@@ -33,8 +33,7 @@ defmodule Algorithms.Raft do
 
   def start_link(write_cache_name) do
     #name: via_tuple("1")
-    #GenServer.start_link(__MODULE__, :ok, name: RNG)
-    init(write_cache_name)
+    GenServer.start_link(__MODULE__, write_cache_name, [])
   end
 
   # defp via_tuple(node_name) do
@@ -44,13 +43,29 @@ defmodule Algorithms.Raft do
   def init(write_cache_name) do
     write_cache = :ets.new(write_cache_name, [:named_table, read_concurrency: true])
     :global.register_name(to_string(node()) <> ".Raft", self())
-    follower(%State{write_cache: write_cache, write_tick: 0, voted_for: nil, term: 0})
+    {:ok, %State{write_cache: write_cache, write_tick: 0, voted_for: nil, term: 0}}
+  end
+
+  def start(raft) do
+    send(raft, :start)
+  end
+
+  def state(raft) do
+    GenServer.call(raft, :get_state)
+  end
+
+  def handle_info(:start, state) do
+    follower(state)
+  end
+
+  def handle_call(:get_state, _from, state) do
+    {:reply, state.state_string, state}
   end
 
 
 
   def follower(state) do
-    IO.puts "follower"
+    #IO.puts "follower"
     state = %{state | state_string: "follower"}
     receive do
       ## Receive heartbeat/append_entries
@@ -68,7 +83,7 @@ defmodule Algorithms.Raft do
 
       ## Getting a Request Vote message will naturally reset the election timeout
       {:request_vote, vote_request} ->
-        IO.puts "Received vote_request from " <> vote_request.node
+        #IO.puts "Received vote_request from " <> vote_request.node
         ## If new term, reset vote
         state =
           cond do
@@ -97,7 +112,7 @@ defmodule Algorithms.Raft do
 
 
   def candidate(state) do
-    IO.puts "candidate"
+    #IO.puts "candidate"
     state = %{state | state_string: "candidate"}
     ## Wait random time between 150-300ms
     :timer.sleep(150 + :rand.uniform(150))
@@ -152,7 +167,7 @@ defmodule Algorithms.Raft do
 
 
   def leader(state) do
-    IO.puts Enum.count(Services.Framework.nodes)
+    #IO.puts Enum.count(Services.Framework.nodes)
     state = %{state | state_string: "leader"}
     :timer.sleep(500)
     entries = :ets.lookup(state.write_cache, state.write_tick)
