@@ -1,4 +1,4 @@
-# KvServer
+# Services
 
 **TODO: Add description**
 
@@ -6,19 +6,19 @@
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
 
-  1. Add `kv_server` to your list of dependencies in `mix.exs`:
+  1. Add `services` to your list of dependencies in `mix.exs`:
 
     ```elixir
     def deps do
-      [{:kv_server, "~> 0.1.0"}]
+      [{:services, "~> 0.1.0"}]
     end
     ```
 
-  2. Ensure `kv_server` is started before your application:
+  2. Ensure `services` is started before your application:
 
     ```elixir
     def application do
-      [applications: [:kv_server]]
+      [applications: [:services]]
     end
     ```
 

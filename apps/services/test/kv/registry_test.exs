@@ -3,6 +3,11 @@ defmodule KV.Registry.Test do
 
   doctest KV.Registry
 
+  setup %{} do
+    registry = KV.Registry.Supervisor.start_link
+    {:ok, registry: registry}
+  end
+
   test "check ETS storage" do
     assert KV.Registry.lookup!(KV.Registry, "bucket") == :error
     bucket = KV.Registry.create(KV.Registry, "bucket")

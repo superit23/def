@@ -1,6 +1,6 @@
-defmodule KVTest do
+defmodule ServicesTest do
   use ExUnit.Case
-  doctest KV
+  doctest Services
 
   test "the truth" do
     assert 1 + 1 == 2

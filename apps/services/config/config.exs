@@ -10,11 +10,11 @@ use Mix.Config
 
 # You can configure for your application as:
 #
-#     config :kv_server, key: :value
+#     config :services, key: :value
 #
 # And access this configuration in your application as:
 #
-#     Application.get_env(:kv_server, :key)
+#     Application.get_env(:services, :key)
 #
 # Or configure a 3rd-party app:
 #

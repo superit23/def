@@ -1,8 +1,8 @@
-defmodule Kv.Mixfile do
+defmodule Services.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :kv,
+    [app: :services,
      version: "0.1.0",
      build_path: "../../_build",
      config_path: "../../config/config.exs",
@@ -18,8 +18,7 @@ defmodule Kv.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger],
-    mod: {KV, []}]
+    [applications: [:logger]]
   end
 
   # Dependencies can be Hex packages:
