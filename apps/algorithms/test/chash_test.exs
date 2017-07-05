@@ -21,7 +21,7 @@ defmodule Algorithms.ConsistentHashing.Test do
       end)) == true
   end
 
-
+  @tag :performance
   test "scale and performance test" do
     h_func = fn val -> :erlang.phash2(val) end
     keys = Enum.map(1..100000, &("key" <> to_string(&1)))
@@ -35,7 +35,7 @@ defmodule Algorithms.ConsistentHashing.Test do
       |> Kernel./(1_000_000)
 
     # Dependent on system; usually less than one
-    assert time < 90
+    assert time < 1
   end
 
 
