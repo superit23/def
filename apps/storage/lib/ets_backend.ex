@@ -9,43 +9,28 @@ defmodule Storage.Ets do
 
   def init(:ok) do
     commit_table = :ets.new(Commit, [])
-    cache_table = :ets.new(Cache, [])
-    {:ok, {commit_table, cache_table}}
+    {:ok, commit_table}
   end
 
 
-  ## Public API
-  def write(pid, keyvalue) do
-    GenServer.call(pid, {:write_cache, keyvalue})
-  end
-
-
-  def delete(pid, keyvalue) do
-    GenServer.call(pid, {:commit, keyvalue})
-  end
-
-
-  def lookup(pid, key) do
-    GenServer.call(pid, {:lookup, key})
-  end
 
 
   ## GenServer Calls
-  def handle_call({:write, keyvalue}, _from, {commit_table, cache_table}) do
-    success = :ets.insert(cache_table, keyvalue)
-    {:reply, success, {commit_table, cache_table}}
+  def handle_call({:write, keyvalue}, _from, commit_table) do
+    success = :ets.insert(commit_table, keyvalue)
+    {:reply, success, commit_table}
   end
 
 
-  def handle_call({:delete, keyvalue}, _from, {commit_table, cache_table}) do
+  def handle_call({:delete, keyvalue}, _from, commit_table) do
     success = :ets.delete(commit_table, keyvalue)
-    {:reply, success, {commit_table, cache_table}}
+    {:reply, success, commit_table}
   end
 
 
-  def handle_call({:lookup, key}, _from, {commit_table, cache_table}) do
+  def handle_call({:lookup, key}, _from, commit_table) do
     value = :ets.lookup(commit_table, key)
-    {:reply, value, {commit_table, cache_table}}
+    {:reply, value, commit_table}
   end
 
 

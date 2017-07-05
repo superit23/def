@@ -10,7 +10,7 @@ defmodule Services.Framework do
   end
 
 
-  def init(state = %{discovery: strategies, poll_interval: poll, services: services}) do
+  def init(%{discovery: strategies, poll_interval: poll, services: services}) do
     # Initialize all services and strategies
     for {strategy, init_args, _} <- strategies do
       strategy.start_link(init_args)
@@ -71,6 +71,7 @@ defmodule Services.Framework do
        |> List.flatten
        |> Enum.uniq
        |> Enum.filter(&(&1 != to_string(node())))
+       |> Enum.map(&(String.to_atom(&1)))
 
     discovered_nodes -- state.nodes
       |> Enum.each(&Node.connect &1)

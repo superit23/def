@@ -35,7 +35,7 @@ defmodule Algorithms.ConsistentHashing.Test do
       |> Kernel./(1_000_000)
 
     # Dependent on system; usually less than one
-    assert time < 5
+    assert time < 90
   end
 
 

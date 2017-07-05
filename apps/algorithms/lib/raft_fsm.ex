@@ -7,8 +7,8 @@ defmodule Algorithms.Raft.Fsm do
   @heartbeat_freq 2_000
 
   ## Public API
-  def start(write_cache_name) do
-    :gen_statem.start_link(__MODULE__, write_cache_name, [])
+  def start_link(commit_storage, cache_storage) do
+    :gen_statem.start_link(__MODULE__, {commit_storage, cache_storage}, [])
   end
 
 
@@ -23,10 +23,10 @@ defmodule Algorithms.Raft.Fsm do
   end
 
 
-  def init(write_cache_name) do
-    write_cache = :ets.new(write_cache_name, [:named_table, read_concurrency: true])
+  def init({commit_storage, cache_storage}) do
+    #write_cache = :ets.new(write_cache_name, [:named_table, read_concurrency: true])
     :global.register_name(to_string(node()) <> ".Raft", self())
-    {:ok, :follower, %State{write_cache: write_cache, write_tick: 0, voted_for: nil, term: 0}, [{:next_event, :cast, :wait}]}
+    {:ok, :follower, %State{write_cache: cache_storage, storage: commit_storage, write_tick: 0, voted_for: nil, term: 0}, [{:next_event, :cast, :wait}]}
   end
 
 
@@ -57,7 +57,8 @@ defmodule Algorithms.Raft.Fsm do
     #IO.puts Enum.count(Services.Framework.nodes)
     data = %{data | current: :leader}
     :timer.sleep(500)
-    entries = :ets.lookup(data.write_cache, data.write_tick)
+    entries = Storage.Backend.lookup(data.write_cache, data.write_tick)
+    #entries = :ets.lookup(data.write_cache, data.write_tick)
 
     ## Always send entries as a type of heartbeat
     for node <- Services.Framework.nodes do
@@ -73,6 +74,7 @@ defmodule Algorithms.Raft.Fsm do
 
     {:keep_state, data, @heartbeat_freq}
   end
+
 
   def handle_event(:timeout, _time, :leader, data) do
     {:keep_state, data, [{:next_event, :cast, :send_entries}]}
@@ -158,7 +160,8 @@ defmodule Algorithms.Raft.Fsm do
     if msg.entries != nil && Enum.count(msg.entries) > 0 do
       ## Cache waiting for two-phase commit
       IO.puts "Appending #{msg.entries}"
-      :ets.insert(data.write_cache, {msg.id, msg.entries})
+      #:ets.insert(data.write_cache, {msg.id, msg.entries})
+      Storage.Backend.write(data.write_cache, {msg.id, msg.entries})
     end
     {:keep_state, data, @election_timeout_min}
   end
@@ -166,7 +169,10 @@ defmodule Algorithms.Raft.Fsm do
 
   def handle_event(:cast, {:commit_entries, msg}, :follower, data) do
     IO.puts "Committing #{msg.id}"
-    :ets.lookup(data.write_cache, msg.id) |> Backend.commit #[{:event_timeout, @election_timeout_min, :become_candidate}]
+    #:ets.lookup(data.write_cache, msg.id) |> Backend.commit #[{:event_timeout, @election_timeout_min, :become_candidate}]
+    Storage.Backend.lookup(data.write_cache, msg.id)
+      |> Enum.map(&Storage.Backend.write(data.storage, &1))
+
     {:keep_state, data, @election_timeout_min}
   end
 
