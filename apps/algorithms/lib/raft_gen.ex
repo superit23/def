@@ -47,27 +47,64 @@ defmodule Algorithms.RaftGen do
   end
 
   def start(raft) do
-    send(raft, :start)
+    GenServer.cast(raft, :start)
   end
 
   def state(raft) do
     GenServer.call(raft, :get_state)
   end
 
-  def handle_info(:start, state) do
-    follower(state)
+  ## State loop
+  def handle_cast(:start, state) do
+    GenServer.cast(self(), {:outerrun, :follower})
+    {:noreply, state}
   end
+
+
+  def handle_cast({:outerrun, next_state}, state) do
+    new_state = GenServer.call(self(), {:next_state, :follower})
+    GenServer.cast(self(), {:outerrun, new_state})
+
+    {:noreply, state}
+  end
+
+
+  def handle_call({:next_state, next_state}, state) do
+    new_state = GenServer.call(self(), next_state)
+
+    state =
+      if new_state == :candidate do
+        %{state | term: state.term + 1}
+      else
+        state
+      end
+
+    {:reply, new_state, state}
+  end
+
+
+  def handle_info(:timeout, state) do
+    case state.current do
+      :follower -> GenServer.cast(self(), :candidate)
+      :candidate -> GenServer.cast(self(), :follower)
+    end
+    {:noreply, state}
+  end
+
 
   def handle_call(:get_state, _from, state) do
-    {:reply, state.state_string, state}
+    {:reply, state.current, state}
+  end
+
+  def terminate(reason, _state) do
+    reason
   end
 
 
+  def handle_call(:follower, state) do
+    state = %{state | current: :follower}
 
-  def follower(state) do
-    #IO.puts "follower"
-    state = %{state | state_string: "follower"}
-    receive do
+    next_state = receive do
       ## Receive heartbeat/append_entries
       {:append_entries, msg} ->
         if msg.entries != nil && Enum.count(msg.entries) > 0 do
@@ -76,10 +113,13 @@ defmodule Algorithms.RaftGen do
           :ets.insert(state.write_cache, {msg.id, msg.entries})
         end
 
+        :follower
+
       ## Leader tells us to commit
       {:commit_entries, msg} ->
         IO.puts "Committing #{msg.id}"
         :ets.lookup(state.write_cache, msg.id) |> Backend.commit
+        :follower
 
       ## Getting a Request Vote message will naturally reset the election timeout
       {:request_vote, vote_request} ->
@@ -102,18 +142,19 @@ defmodule Algorithms.RaftGen do
           end
 
         send vote_request.sender, {:vote, %{vote: vote, term: state.term}}
+        :follower
     after
       ## No response from leader/candidate (election timeout)
-      5_000 -> candidate(%{state | term: state.term + 1})
+      5_000 -> :candidate
     end
 
-    follower(state)
+    #GenServer.cast(self(), :follower)
+    {:reply, next_state, state}
   end
 
 
-  def candidate(state) do
-    #IO.puts "candidate"
-    state = %{state | state_string: "candidate"}
+  def handle_call(:candidate, state) do
+    state = %{state | current: :candidate}
     ## Wait random time between 150-300ms
     :timer.sleep(150 + :rand.uniform(150))
 
@@ -121,16 +162,18 @@ defmodule Algorithms.RaftGen do
     votes_for_me = 1
     votes_for_others = 0
 
-    if Enum.count(Services.Framework.nodes) == 0 do
-      leader(state)
-    end
+    # if Enum.count(Services.Framework.nodes) == 0 do
+    #   leader(state)
+    # end
 
     for node <- Services.Framework.nodes do
       send :global.whereis_name(to_string(node) <> ".Raft"), {:request_vote, %{term: state.term, sender: self(), node: to_string(node())}}
     end
 
-    receive do
+    next_state = receive do
       {:vote, %{vote: voted_for_me, term: received_term}} ->
+
+        state_holder = :candidate
 
         votes_for_me =
           if voted_for_me && received_term == state.term do
@@ -150,25 +193,26 @@ defmodule Algorithms.RaftGen do
 
         ## Lost the election; become follower
         if votes_for_others > num_nodes / 2 do
-          follower(state)
+          state_holder = :follower
         end
 
         ## Won the election; become leader
         if votes_for_me > num_nodes / 2 do
-          leader(state)
+          state_holder = :leader
         end
+
+        state_holder
       after
         ## Timed out; possible split vote or node failure
-        5_000 -> follower(state)
+        5_000 -> if Enum.count(Services.Framework.nodes) == 0 do :leader else :follower end
     end
 
-    candidate(state)
+    {:reply, next_state, state}
   end
 
 
-  def leader(state) do
-    #IO.puts Enum.count(Services.Framework.nodes)
-    state = %{state | state_string: "leader"}
+  def handle_call(:leader, state) do
+    state = %{state | current: :leader}
     :timer.sleep(500)
     entries = :ets.lookup(state.write_cache, state.write_tick)
 
@@ -184,7 +228,7 @@ defmodule Algorithms.RaftGen do
         state
       end
 
-    leader(state)
+    {:reply, :leader, state}
   end
 
 end

@@ -51,7 +51,7 @@ defmodule Algorithms.Raft do
 
   def follower(state) do
     IO.puts "follower"
-    state = %{state | state_string: "follower"}
+    state = %{state | current: :follower}
     receive do
       ## Receive heartbeat/append_entries
       {:append_entries, msg} ->
@@ -98,7 +98,7 @@ defmodule Algorithms.Raft do
 
   def candidate(state) do
     IO.puts "candidate"
-    state = %{state | state_string: "candidate"}
+    state = %{state | current: :candidate}
     ## Wait random time between 150-300ms
     :timer.sleep(150 + :rand.uniform(150))
 
@@ -153,7 +153,7 @@ defmodule Algorithms.Raft do
 
   def leader(state) do
     IO.puts Enum.count(Services.Framework.nodes)
-    state = %{state | state_string: "leader"}
+    state = %{state | current: :leader}
     :timer.sleep(500)
     entries = :ets.lookup(state.write_cache, state.write_tick)
 
