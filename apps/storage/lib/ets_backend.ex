@@ -2,7 +2,7 @@ defmodule Storage.Ets do
   use GenServer
 
   ## Init
-  def start_link(_args) do
+  def start_link do
     GenServer.start_link(__MODULE__, :ok, [])
   end
 

@@ -51,10 +51,10 @@ defmodule Discovery.Multicast do
     :gen_udp.close(send_sock)
     :gen_udp.close(recv_sock)
 
-    to_return = ""
-    for {:ok, {_ip, _port, data}} <- results do
-      to_return = data
-    end
+    to_return =
+      for {:ok, {_ip, _port, data}} <- results do
+        data
+      end
 
     to_return
   end

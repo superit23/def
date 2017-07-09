@@ -1,175 +1,240 @@
 defmodule Algorithms.Raft do
-  ## States:
-  ## Follower
-  ## Candidate
+
+  @behaviour :gen_statem
+  @election_timeout_min 4_000
+  @election_timeout_max 5_000
+
+  @heartbeat_freq 2_000
+
+  ## Public API
+  def start_link(commit_storage, cache_storage) do
+    :gen_statem.start_link(__MODULE__, {commit_storage, cache_storage}, [])
+  end
+
+
+  def get_status(pid) do
+    # :gen_statem.call(:global.whereis_name(to_string(node()) <> ".Raft"), :get_status)
+    :gen_statem.call(pid, :get_status)
+  end
+
+
+  def write(pid, {key, value}) do
+    write(pid,[{key, value}])
+  end
+
+  def write(pid, list) do
+    :gen_statem.cast(pid, {:write, list})
+  end
+
+
+  ## Callbacks
+  def callback_mode do
+    :handle_event_function
+  end
+
+
+  def init({commit_storage, cache_storage}) do
+    #write_cache = :ets.new(write_cache_name, [:named_table, read_concurrency: true])
+    :global.register_name(to_string(node()) <> ".Raft", self())
+    {:ok, :follower, %State{write_cache: cache_storage, storage: commit_storage, write_tick: 0, voted_for: nil, term: 0}, [{:next_event, :cast, :wait}]}
+  end
+
+
+  def terminate(_reason, _state, _data) do
+    :void
+  end
+
+
+  def code_change(_vsn, state, data, _extra) do
+    {:ok, state, data}
+  end
+
+
+  ## Server functions
+  def handle_event({:call, from}, :get_status, state, data) do
+    cond do
+      state == :leader -> {:keep_state, data, [{:reply, from, data}, {:next_event, :cast, :send_entries}]}
+      true -> {:keep_state, data, [{:reply, from, data}]}
+    end
+  end
+
+
+  ## State functions
+
   ## Leader
 
-  ## LEADER ELECTION
-  ## All start in Follower
-  ## If Followers don't hear from leader, they become a Candidate
-  ##  -> Election timeout randomized between 150ms and 300ms
-  ## Candidate requests votes from other nodes (votes for itself)
-  ## Nodes reply with votes (only votes for first candidate)
-  ## After a vote, each node resets its election timeout
-  ## Candidate becomes leader if has majority
-  ## Leader sends AppendEntries as heartbeat
-  ## Election term continues until a follower stops receiving heartbeats
-  ##  and becomes a Candidate
-  ## Higher election term wins in case of split
-
-
-  ## COMMITTING/REPLICATION
-  ## All changes go through leader
-  ## Each change is added as an entry in the node's logger
-  ## Entry remains uncommitted
-  ## Leader replicates to other nodes
-  ## Leader waits until a majority have written the entry
-  ## Entry becomes committed on leader
-  ## Leader notifies followers it has been committed
-  ## They commit as well
-
-  #@behaviour :gen_fsm
-  #@table_name WriteCacheNG
-
-  def start_link(write_cache_name) do
-    #name: via_tuple("1")
-    #GenServer.start_link(__MODULE__, :ok, name: RNG)
-    init(write_cache_name)
-  end
-
-  # defp via_tuple(node_name) do
-  #   {:via, :gproc, {:n, 1, {:raft, node_name}}}
-  # end
-
-  def init(write_cache_name) do
-    write_cache = :ets.new(write_cache_name, [:named_table, read_concurrency: true])
-    :global.register_name(to_string(node()) <> ".Raft", self())
-    follower(%State{write_cache: write_cache, write_tick: 0, voted_for: nil, term: 0})
-  end
-
-
-
-  def follower(state) do
-    IO.puts "follower"
-    state = %{state | current: :follower}
-    receive do
-      ## Receive heartbeat/append_entries
-      {:append_entries, msg} ->
-        if msg.entries != nil && Enum.count(msg.entries) > 0 do
-          ## Cache waiting for two-phase commit
-          IO.puts "Appending #{msg.entries}"
-          :ets.insert(state.write_cache, {msg.id, msg.entries})
-        end
-
-      ## Leader tells us to commit
-      {:commit_entries, msg} ->
-        IO.puts "Committing #{msg.id}"
-        :ets.lookup(state.write_cache, msg.id) |> Backend.commit
-
-      ## Getting a Request Vote message will naturally reset the election timeout
-      {:request_vote, vote_request} ->
-        IO.puts "Received vote_request from " <> vote_request.node
-        ## If new term, reset vote
-        state =
-          cond do
-            state.term < vote_request.term -> %{state | voted_for: nil, term: vote_request.term}
-            state.term > vote_request.term -> send vote_request.sender, {:vote, false}
-            true -> state
-          end
-
-        ## Vote only if no current vote for term
-        {state, vote} =
-          if state.voted_for == nil do
-            #state.voted_for = vote_request.sender
-            {%{state | voted_for: vote_request.sender}, true}
-          else
-            {state, false}
-          end
-
-        send vote_request.sender, {:vote, %{vote: vote, term: state.term}}
-    after
-      ## No response from leader/candidate (election timeout)
-      5_000 -> candidate(%{state | term: state.term + 1})
-    end
-
-    follower(state)
-  end
-
-
-  def candidate(state) do
-    IO.puts "candidate"
-    state = %{state | current: :candidate}
-    ## Wait random time between 150-300ms
-    :timer.sleep(150 + :rand.uniform(150))
-
-    ## Vote for self
-    votes_for_me = 1
-    votes_for_others = 0
-
-    if Enum.count(Services.Framework.nodes) == 0 do
-      leader(state)
-    end
-
-    for node <- Services.Framework.nodes do
-      send :global.whereis_name(to_string(node) <> ".Raft"), {:request_vote, %{term: state.term, sender: self(), node: to_string(node())}}
-    end
-
-    receive do
-      {:vote, %{vote: voted_for_me, term: received_term}} ->
-
-        votes_for_me =
-          if voted_for_me && received_term == state.term do
-            votes_for_me + 1
-          else
-            votes_for_me
-          end
-
-        votes_for_others =
-          if !voted_for_me do
-            votes_for_others = votes_for_others + 1
-          else
-            votes_for_others
-          end
-
-        num_nodes = Enum.count(Services.Framework.nodes) + 1
-
-        ## Lost the election; become follower
-        if votes_for_others > num_nodes / 2 do
-          follower(state)
-        end
-
-        ## Won the election; become leader
-        if votes_for_me > num_nodes / 2 do
-          leader(state)
-        end
-      after
-        ## Timed out; possible split vote or node failure
-        5_000 -> follower(state)
-    end
-
-    candidate(state)
-  end
-
-
-  def leader(state) do
-    IO.puts Enum.count(Services.Framework.nodes)
-    state = %{state | current: :leader}
-    :timer.sleep(500)
-    entries = :ets.lookup(state.write_cache, state.write_tick)
+  def handle_event(:cast, :send_entries, :leader, data) do
+    data = %{data | current: :leader}
+    entries = Storage.Backend.lookup(data.write_cache, data.write_tick)
 
     ## Always send entries as a type of heartbeat
     for node <- Services.Framework.nodes do
-      send :global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{id: state.write_tick, entries: entries}}
+      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{id: data.append_tick, entries: entries, leader: self()}})
     end
 
-    state =
+    data =
       if Enum.count(entries) > 0 do
-        %{state | write_tick: state.write_tick + 1}
+        %{data | write_tick: data.write_tick + 1, num_confirms: 1}
       else
-        state
+        data
       end
 
-    leader(state)
+    {:keep_state, data, @heartbeat_freq}
+  end
+
+
+  def handle_event(:timeout, _time, :leader, data) do
+    {:keep_state, data, [{:next_event, :cast, :send_entries}]}
+  end
+
+
+  def handle_event(:cast, :append_entries_confirm, :leader, data) do
+    data = %{data | num_confirms: data.num_confirms + 1}
+
+    data =
+      if data.num_confirms > Enum.count(Services.Framework.nodes) / 2 do
+        Storage.Backend.lookup(data.write_cache, data.append_tick)
+          |> Enum.at(0)
+          |> elem(1)
+          |> Enum.map(&Storage.Backend.write(data.storage, &1))
+
+        for node <- Services.Framework.nodes do
+          :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:commit_entries, %{id: data.append_tick}})
+        end
+
+        %{data | append_tick: data.append_tick + 1}
+      else
+        data
+      end
+
+    {:keep_state, data, [{:next_event, :cast, :send_entries}]}
+  end
+
+
+  def handle_event(:cast, {:write, key_values}, :leader, data) do
+    Storage.Backend.write(data.write_cache, {data.write_tick, key_values})
+    {:keep_state, data, [{:next_event, :cast, :send_entries}]}
+  end
+
+
+
+  ## Candidate
+
+  def handle_event(:cast, :request_vote, :candidate, data) do
+    data = %{data | current: :candidate}
+
+    for node <- Services.Framework.nodes do
+      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:receive_vote_req, %{term: data.term, sender: self(), node: to_string(node())}})
+    end
+
+    {:keep_state, data}
+  end
+
+
+  def handle_event(:cast, {:vote, %{vote: voted_for_me, term: received_term}}, :candidate, data) do
+    data =
+      if data.votes_for_me == 0 do
+        %{data | votes_for_me: 1}
+      else
+        data
+      end
+
+    data =
+      if voted_for_me && received_term == data.term do
+        %{data | votes_for_me: data.votes_for_me + 1}
+      else
+        data
+      end
+
+    data =
+      if received_term == data.term do
+        %{data | total_votes: data.total_votes + 1}
+      else
+        data
+      end
+
+    num_nodes = Enum.count(Services.Framework.nodes) + 1
+
+    cond do
+      data.votes_for_me > num_nodes / 2 ->
+        data = %{data | votes_for_me: 0, total_votes: 0}
+        {:next_state, :leader, data, [{:next_event, :cast, :send_entries}]}
+      data.votes_for_me - data.total_votes > num_nodes / 2 ->
+        data = %{data | votes_for_me: 0, total_votes: 0}
+        {:next_state, :follower, data, [{:next_event, :cast, :wait}]}
+      true ->
+        {:keep_state, data, @election_timeout_min}
+    end
+
+
+  end
+
+
+  def handle_event(:timeout, _time, :candidate, data) do
+    data = %{data | votes_for_me: 0, total_votes: 0}
+    {:next_state, :follower, data,[{:next_event, :cast, :wait}]}
+  end
+
+
+  ## Follower [{:event_timeout, @election_timeout_min, :become_candidate}]
+  def handle_event(:cast, :wait, :follower, data) do
+    data = %{data | current: :follower}
+    {:keep_state, data, @election_timeout_min}
+  end
+
+
+  def handle_event(:cast, {:append_entries, msg}, :follower, data) do
+    if msg.entries != nil && Enum.count(msg.entries) > 0 do
+      ## Cache waiting for two-phase commit
+      #{msg.id, msg.entries}
+      Storage.Backend.write(data.write_cache, msg.entries)
+      :gen_statem.cast(msg.leader, :append_entries_confirm)
+    end
+    {:keep_state, data, @election_timeout_min}
+  end
+
+
+  def handle_event(:cast, {:commit_entries, msg}, :follower, data) do
+    IO.puts "Committing #{msg.id}"
+    #:ets.lookup(data.write_cache, msg.id) |> Backend.commit #[{:event_timeout, @election_timeout_min, :become_candidate}]
+    Storage.Backend.lookup(data.write_cache, msg.id)
+      |> Enum.at(0)
+      |> elem(1)
+      |> Enum.map(&Storage.Backend.write(data.storage, &1))
+
+    data = %{data | write_tick: data.write_tick + 1}
+
+    {:keep_state, data, @election_timeout_min}
+  end
+
+
+  def handle_event(:cast, {:receive_vote_req, vote_request}, :follower, data) do
+    #IO.puts "Received vote_request from " <> vote_request.node
+    ## If new term, reset vote
+    data =
+      cond do
+        data.term < vote_request.term -> %{data | voted_for: nil, term: vote_request.term}
+        data.term > vote_request.term ->
+          data
+        true -> data
+      end
+
+    ## Vote only if no current vote for term
+    {data, vote} =
+      if data.voted_for == nil do
+        #state.voted_for = vote_request.sender
+        {%{data | voted_for: vote_request.sender}, true}
+      else
+        {data, false}
+      end
+
+    :gen_statem.cast(vote_request.sender, {:vote, %{vote: vote, term: data.term}})
+    {:keep_state, data, @election_timeout_min}
+  end
+
+
+  def handle_event(:timeout, _time, :follower, data) do
+    {:next_state, :candidate, data, [{:next_event, :cast, :request_vote}]}
   end
 
 end
