@@ -5,7 +5,7 @@ otp_release:
   - 19.1
 
 script:
-  - MIX_ENV=test mix do compile, coveralls.json --exclude performance
+  - MIX_ENV=test mix do compile, coveralls.json --exclude performance --umbrella
 after_script:
   - MIX_ENV=docs mix deps.get
   - MIX_ENV=docs mix inch.report

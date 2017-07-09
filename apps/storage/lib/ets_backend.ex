@@ -8,7 +8,7 @@ defmodule Storage.Ets do
 
 
   def init(:ok) do
-    commit_table = :ets.new(Commit, [])
+    commit_table = :ets.new(Commit, [read_concurrency: true])
     {:ok, commit_table}
   end
 
