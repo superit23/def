@@ -126,7 +126,7 @@ defmodule Algorithms.Raft do
   end
 
 
-  def handle_event(:call, {:request_commit_history, from_tick, leader_tick}, :leader, data) do
+  def handle_event({:call, from}, {:request_commit_history, from_tick, leader_tick}, :leader, data) do
     # TODO: The write_cache shouldn't hold the info forever.
     # This method will not work in practice.
     commit_history = from_tick..leader_tick
