@@ -23,6 +23,7 @@ defmodule Def.Mixfile do
   # Dependencies listed here are available only for this project
   # and cannot be accessed from applications inside the apps folder
   defp deps do
-    [{:excoveralls, "~> 0.7.1"}]
+    [{:excoveralls, "~> 0.7.1", only: :test},
+     {:inch_ex, only: :docs}]
   end
 end

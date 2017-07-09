@@ -6,5 +6,8 @@ otp_release:
 
 script:
   - MIX_ENV=test mix do compile, coveralls.json --exclude performance
+after_script:
+  - MIX_ENV=docs mix deps.get
+  - MIX_ENV=docs mix inch.report
 after_success:
   - bash <(curl -s https://codecov.io/bash)
