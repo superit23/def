@@ -11,7 +11,7 @@ defmodule Discovery.Mesos do
   @doc """
   Initializes the Mesos integration with the API `url`.
   """
-  def start_link(url \\"http://leader.mesos:5050/v1/api") do
+  def start_link(url \\ "http://leader.mesos:5050/v1/api") do
     Integrations.Mesos.start_link(url)
   end
 

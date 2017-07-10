@@ -35,6 +35,6 @@ defmodule Discovery.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    [{:integrations, in_umbrella: true} ]
+    [{:integrations, in_umbrella: true}]
   end
 end

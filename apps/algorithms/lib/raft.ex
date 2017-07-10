@@ -111,7 +111,7 @@ defmodule Algorithms.Raft do
         Storage.Backend.lookup(data.write_cache, data.append_tick)
           |> Enum.at(0)
           |> elem(1)
-          |> Enum.map(&Storage.Backend.write(data.storage, &1))
+          |> Enum.each(&Storage.Backend.write(data.storage, &1))
 
         for node <- Services.Framework.nodes do
           :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:commit_entries, %{tick: data.append_tick}})
@@ -183,9 +183,11 @@ defmodule Algorithms.Raft do
       data.votes_for_me > num_nodes / 2 ->
         data = %{data | votes_for_me: 0, total_votes: 0}
         {:next_state, :leader, data, [{:next_event, :cast, :send_entries}]}
+
       data.votes_for_me - data.total_votes > num_nodes / 2 ->
         data = %{data | votes_for_me: 0, total_votes: 0}
         {:next_state, :follower, data, [{:next_event, :cast, :wait}]}
+
       true ->
         {:keep_state, data, rand_election_time}
     end
@@ -210,11 +212,15 @@ defmodule Algorithms.Raft do
   def handle_event(:cast, {:append_entries, msg}, :follower, data) do
     data =
       if msg.term >= data.term do
-        
+
         append_tick =
           if msg.tick > data.append_tick + 1 do
             ## We call to prevent a race condition, so entries are always in order.
-            :gen_statem.call(msg.leader, {:request_commit_history, data.append_tick, msg.tick})
+            history = :gen_statem.call(msg.leader, {:request_commit_history, data.append_tick, msg.tick})
+              |> List.flatten
+            history |> Enum.each(&Storage.Backend.write(data.write_cache, &1))
+            history
+              |> Enum.map(&elem(&1, 1))
               |> Enum.each(&Storage.Backend.write(data.storage, &1))
 
             msg.tick
@@ -251,7 +257,7 @@ defmodule Algorithms.Raft do
     Storage.Backend.lookup(data.write_cache, msg.tick)
       |> Enum.at(0)
       |> elem(1)
-      |> Enum.map(&Storage.Backend.write(data.storage, &1))
+      |> Enum.each(&Storage.Backend.write(data.storage, &1))
 
     data = %{data | append_tick: data.append_tick + 1}
 

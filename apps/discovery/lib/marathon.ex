@@ -11,7 +11,7 @@ defmodule Discovery.Marathon do
   @doc """
   Initializes the discovery mechanism with the Marathon API `url`.
   """
-  def start_link(url \\"http://marathon.mesos:8080/v2") do
+  def start_link(url \\ "http://marathon.mesos:8080/v2") do
     Integrations.Marathon.start_link(url)
   end
 

@@ -8,8 +8,8 @@ defmodule Discovery.Multicast do
 
   @behaviour Discovery.Strategy
 
-  @ucast_port 50000
-  @mcast_port 49999
+  @ucast_port 50_000
+  @mcast_port 49_999
   @mcast_group {224,1,1,1}
 
   @doc """

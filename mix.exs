@@ -29,6 +29,7 @@ defmodule Def.Mixfile do
   # and cannot be accessed from applications inside the apps folder
   defp deps do
     [{:excoveralls, "~> 0.7.1", only: :test},
-     {:inch_ex, only: :docs}]
+     {:inch_ex, only: :docs},
+     {:credo, "~> 0.8", only: [:dev, :test], runtime: false}]
   end
 end

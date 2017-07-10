@@ -24,8 +24,8 @@ defmodule Algorithms.ConsistentHashing.Test do
   @tag :performance
   test "scale and performance test" do
     h_func = fn val -> :erlang.phash2(val) end
-    keys = Enum.map(1..100000, &("key" <> to_string(&1)))
-    buckets = Enum.map(1..128000, &("bucket" <> to_string(&1)))
+    keys = Enum.map(1..100_000, &("key" <> to_string(&1)))
+    buckets = Enum.map(1..128_000, &("bucket" <> to_string(&1)))
 
     {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_buckets(buckets, h_func)
     time =

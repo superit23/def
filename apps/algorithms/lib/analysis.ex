@@ -2,7 +2,7 @@ defmodule Algorithms.CHAnalysis do
   import ExProf.Macro
 
   def analyze(n_keys, n_buckets) do
-    h_func = fn val -> :erlang.phash2(val, 4294967296) end
+    h_func = fn val -> :erlang.phash2(val, 4_294_967_296) end
     keys = Enum.map(1..n_keys, &("key" <> to_string(&1)))
     buckets = Enum.map(1..n_buckets, &("bucket" <> to_string(&1)))
 
@@ -28,7 +28,7 @@ defmodule Algorithms.CHAnalysis do
   def ets_perf(n_keys) do
     keys = Enum.map(1..n_keys, &{&1, :erlang.phash2("key" <> to_string(&1))})
     table = :ets.new(ETSTable, [:named_table, read_concurrency: true])
-    :ets.insert(ETSTable, {1, 124145142})
+    :ets.insert(ETSTable, {1, 124_145_142})
     IO.puts "#{Enum.at(:ets.lookup(ETSTable, 1), 0)}"
 
     _ = profile do
