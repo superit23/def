@@ -74,7 +74,7 @@ defmodule Algorithms.Raft do
 
     ## Always send entries as a type of heartbeat
     for node <- Services.Framework.nodes do
-      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{tick: data.append_tick, entries: entries, leader: self()}})
+      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{tick: data.append_tick, entries: entries, leader: self(), term: data.term}})
     end
 
     data =
@@ -129,9 +129,9 @@ defmodule Algorithms.Raft do
   def handle_event({:call, from}, {:request_commit_history, from_tick, leader_tick}, :leader, data) do
     # TODO: The write_cache shouldn't hold the info forever.
     # This method will not work in practice.
-    commit_history = from_tick..leader_tick
+    commit_history = from_tick..(leader_tick - 1)
       |> Enum.map(&Storage.Backend.lookup(data.write_cache, &1))
-    {:keep_state, data, @heartbeat_freq, [{:reply, from, commit_history}]}
+    {:keep_state, data, [{:reply, from, commit_history}, {:next_event, :cast, :send_entries}]}
   end
 
 
@@ -210,19 +210,31 @@ defmodule Algorithms.Raft do
   def handle_event(:cast, {:append_entries, msg}, :follower, data) do
     data =
       if msg.term >= data.term do
+        
+        append_tick =
+          if msg.tick > data.append_tick + 1 do
+            ## We call to prevent a race condition, so entries are always in order.
+            :gen_statem.call(msg.leader, {:request_commit_history, data.append_tick, msg.tick})
+              |> Enum.each(&Storage.Backend.write(data.storage, &1))
 
-        if msg.tick > data.append_tick do
-          ## We call to prevent a race condition, so entries are always in order.
-          :gen_statem.call(msg.leader, {:request_commit_history, data.append_tick, msg.tick})
-        end
+            msg.tick
+          else
+            data.append_tick
+          end
 
-        if msg.entries != nil && Enum.count(msg.entries) > 0 do
-          ## Cache waiting for two-phase commit
-          Storage.Backend.write(data.write_cache, msg.entries)
-          :gen_statem.cast(msg.leader, :append_entries_confirm)
-        end
+        write_tick =
+          if Enum.count(msg.entries) > 0 do
+            ## Cache waiting for two-phase commit
+            Storage.Backend.write(data.write_cache, msg.entries)
+            :gen_statem.cast(msg.leader, :append_entries_confirm)
 
-        %{data | leader: msg.leader, term: msg.term}
+            data.write_tick + 1
+          else
+            data.write_tick
+          end
+
+        %{data | leader: msg.leader, term: msg.term,
+          write_tick: write_tick, append_tick: append_tick}
       else
         ## We're a follower to a leader of a higher election term,
         ## so we ignore this leader's request
@@ -234,14 +246,14 @@ defmodule Algorithms.Raft do
 
 
   def handle_event(:cast, {:commit_entries, msg}, :follower, data) do
-    IO.puts "Committing #{msg.id}"
-    #:ets.lookup(data.write_cache, msg.id) |> Backend.commit #[{:event_timeout, @election_timeout_min, :become_candidate}]
-    Storage.Backend.lookup(data.write_cache, msg.id)
+    IO.puts "Committing #{msg.tick}"
+
+    Storage.Backend.lookup(data.write_cache, msg.tick)
       |> Enum.at(0)
       |> elem(1)
       |> Enum.map(&Storage.Backend.write(data.storage, &1))
 
-    data = %{data | write_tick: data.write_tick + 1}
+    data = %{data | append_tick: data.append_tick + 1}
 
     {:keep_state, data, rand_election_time}
   end
@@ -277,7 +289,7 @@ defmodule Algorithms.Raft do
 
 
   def handle_event(:cast, {:rollback, leader_tick}, :follower, data) do
-    data.append_tick..leader_tick
+    data.append_tick..(leader_tick - 1)
       |> Enum.each(&Storage.Backend.delete(data.write_cache, &1))
 
     {:keep_state, data, rand_election_time}
