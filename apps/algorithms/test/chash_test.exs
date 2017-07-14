@@ -21,6 +21,7 @@ defmodule Algorithms.ConsistentHashing.Test do
       end)) == true
   end
 
+
   @tag :performance
   test "scale and performance test" do
     h_func = fn val -> :erlang.phash2(val) end

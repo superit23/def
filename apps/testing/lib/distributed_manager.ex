@@ -28,7 +28,7 @@ defmodule Testing.DistributedManager do
 
   def spawn_slaves(num_nodes) do
     1..num_nodes
-    |> Enum.map(&(~c"slave#{$1}@127.0.0.1"))
+    |> Enum.map(fn idx -> ~c"slave#{idx}@127.0.0.1" end)
     |> Enum.map(&Task.async(fn -> spawn_slave(&1) end))
     |> Enum.map(&Task.await(&1, 30_000))
   end
@@ -36,13 +36,13 @@ defmodule Testing.DistributedManager do
 
   defp spawn_slave(node_host) do
     {:ok, node} = :slave.start(~c"127.0.0.1", node_name(node_host),
-      ~c"loader inet -hosts 127.0.0.1 -setcookie #{:erlang.get_cookie()}")
+      ~c"-loader inet -hosts 127.0.0.1 -setcookie #{:erlang.get_cookie()}")
 
     :rpc.block_call(node, :code, :add_paths, [:code.get_path()])
 
     for {app_name, _, _} <- Application.loaded_applications do
       for {key, value} <- Application.get_all_env(app_name) do
-        :rpc.block_call(node, :put_env, [app_name, key, value])
+        :rpc.block_call(node, Application, :put_env, [app_name, key, value])
       end
     end
 
@@ -55,6 +55,7 @@ defmodule Testing.DistributedManager do
 
     {:ok, node}
   end
+
 
   defp node_name(node_host) do
     node_host

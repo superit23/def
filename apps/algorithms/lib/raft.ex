@@ -1,10 +1,10 @@
 defmodule Algorithms.Raft do
 
   @behaviour :gen_statem
-  @election_timeout_min 4_000
-  @election_timeout_max 5_000
+  @election_timeout_min 1_000
+  @election_timeout_max 1_500
 
-  @heartbeat_freq 2_000
+  @heartbeat_freq 500
 
   ## Public API
   def start_link(commit_storage, cache_storage) do
@@ -151,7 +151,13 @@ defmodule Algorithms.Raft do
       :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:receive_vote_req, %{term: data.term, sender: self(), node: to_string(node())}})
     end
 
-    {:keep_state, data}
+    if Enum.count(Services.Framework.nodes) == 0 do
+      data = %{data | votes_for_me: 0, total_votes: 0}
+      {:next_state, :leader, data, [{:next_event, :cast, :send_entries}]}
+    else
+      {:keep_state, data}
+    end
+
   end
 
 
@@ -189,7 +195,7 @@ defmodule Algorithms.Raft do
         {:next_state, :follower, data, [{:next_event, :cast, :wait}]}
 
       true ->
-        {:keep_state, data, rand_election_time}
+        {:keep_state, data, rand_election_time()}
     end
 
 
@@ -205,7 +211,7 @@ defmodule Algorithms.Raft do
   ## Follower
   def handle_event(:cast, :wait, :follower, data) do
     data = %{data | current: :follower}
-    {:keep_state, data, rand_election_time}
+    {:keep_state, data, rand_election_time()}
   end
 
 
@@ -247,7 +253,7 @@ defmodule Algorithms.Raft do
         data
       end
 
-    {:keep_state, data, rand_election_time}
+    {:keep_state, data, rand_election_time()}
   end
 
 
@@ -261,7 +267,7 @@ defmodule Algorithms.Raft do
 
     data = %{data | append_tick: data.append_tick + 1}
 
-    {:keep_state, data, rand_election_time}
+    {:keep_state, data, rand_election_time()}
   end
 
 
@@ -285,7 +291,7 @@ defmodule Algorithms.Raft do
       end
 
     :gen_statem.cast(vote_request.sender, {:vote, %{vote: vote, term: data.term}})
-    {:keep_state, data, rand_election_time}
+    {:keep_state, data, rand_election_time()}
   end
 
 
@@ -298,7 +304,7 @@ defmodule Algorithms.Raft do
     data.append_tick..(leader_tick - 1)
       |> Enum.each(&Storage.Backend.delete(data.write_cache, &1))
 
-    {:keep_state, data, rand_election_time}
+    {:keep_state, data, rand_election_time()}
   end
 
 

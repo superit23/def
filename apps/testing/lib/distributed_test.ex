@@ -6,13 +6,13 @@ defmodule Mix.Tasks.Test.Distributed do
   @default_count 4
 
   def run(params) do
-    {switches, _, _} = OptionParser.parse(params, [switches: [count :integer]])
+    {switches, _, _} = OptionParser.parse(params, [switches: [count: :integer]])
 
     app = Mix.Project.config[:app]
     Application.ensure_started(app)
 
     Keyword.get(switches, :count, @default_count)
-      |> DistributedManager.start()
+      |> Testing.DistributedManager.start()
 
 
     # Rebuild the params, but remove count
@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Test.Distributed do
 
     Mix.Tasks.Test.run(params)
 
-    DistributedManager.stop()
+    Testing.DistributedManager.stop()
   end
 
   # Initial starting point. Recurse with pattern matching.
