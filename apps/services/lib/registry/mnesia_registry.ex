@@ -1,33 +1,39 @@
 defmodule Services.Registry.Mnesia do
 
   def start_link do
-    :mnesia.create_schema(List.flatten([node(), Services.Framework.nodes]))
-    :mnesia.start()
-    :mnesia.create_table(ProcRegistry, [attributes: [:name, :pid]])
+    GenServer.start_link(__MODULE__, :ok, [])
   end
 
 
-  def whereis_name(name) do
+  def init(:ok) do
+    :mnesia.create_schema([node()] ++ Services.Framework.nodes)
+    :mnesia.start()
+    :mnesia.create_table(ProcRegistry, [attributes: [:name, :pid]])
+    {:ok, {}}
+  end
+
+
+  def handle_call({:whereis_name, name}, _from, {}) do
     {:atomic, [record]} = :mnesia.transaction(fn ->
       :mnesia.read({ProcRegistry, name})
     end)
-    elem(record, 2)
+    {:reply, elem(record, 2), {}}
   end
 
 
-  def register_name(name, pid) do
+  def handle_call({:register_name, name, pid}, _from, {}) do
     :mnesia.transaction(fn ->
       :mnesia.write({ProcRegistry, name, pid})
     end)
+    {:reply, true, {}}
   end
 
 
-  def unregister_name(name) do
+  def handle_call({:unregister_name, name}, _from, {}) do
     :mnesia.transaction(fn ->
       :mnesia.delete({ProcRegistry, name})
     end)
+    {:reply, true, {}}
   end
-
-
 
 end

@@ -77,7 +77,7 @@ defmodule Services.Framework do
       |> Enum.each(&Node.connect &1)
 
     poll(state)
-    {:noreply, %{state | nodes: Enum.uniq(state.nodes ++ discovered_nodes), ticks: state.ticks + 1}}
+    {:noreply, %{state | nodes: Enum.uniq(discovered_nodes ++ state.nodes), ticks: state.ticks + 1}}
   end
 
 end
