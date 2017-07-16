@@ -1,6 +1,6 @@
 # Testing
 
-**Inspired by (and derived from) github.com/sscheider1207/distributed_test (MIT)**
+**Inspired by (and derived from) github.com/sschneider1207/distributed_test (MIT)**
 
 ## Installation
 
