@@ -12,8 +12,8 @@ defmodule KV.Registry.Test do
     assert KV.Registry.lookup!(KV.Registry, "bucket") == :error
     bucket = KV.Registry.create(KV.Registry, "bucket")
     assert KV.Registry.lookup!(KV.Registry, "bucket") == {:ok, bucket}
-    assert KV.Bucket.get(bucket, "key") == nil
-    assert KV.Bucket.put(bucket, "key", "value") == :ok
+    assert KV.Partition.get(bucket, "key") == nil
+    assert KV.Partition.put(bucket, "key", "value") == :ok
   end
 
 

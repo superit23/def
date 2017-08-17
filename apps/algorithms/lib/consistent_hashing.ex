@@ -15,7 +15,7 @@ defmodule Algorithms.ConsistentHashing do
     iex> buckets = Enum.map(1..6, &("bucket" <> to_string(&1)))
     ["bucket1", "bucket2",...
 
-    iex> {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_buckets(buckets, h_func)
+    iex> {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(buckets, h_func)
     {{:array, 6, 10,...
 
     iex> Algorithms.ConsistentHashing.find_many(keys, h_buckets, hash_map, h_func)
@@ -58,14 +58,14 @@ defmodule Algorithms.ConsistentHashing do
   Using the supplied buckets and hash function, creates a hash map,
   sorts the buckets, and returns them as an Erlang array.
   """
-  def prepare_buckets(buckets, h_func) do
-    h_buckets = buckets |> Enum.map(&h_func.(&1)) |> Enum.sort
-    hash_map = buckets |> Enum.reduce(%{},
-      fn bucket, acc ->
-        Map.put(acc, h_func.(bucket), bucket)
+  def prepare_partitions(partitions, h_func) do
+    h_partitions = partitions |> Enum.map(&h_func.(&1)) |> Enum.sort
+    hash_map = partitions |> Enum.reduce(%{},
+      fn partition, acc ->
+        Map.put(acc, h_func.(partition), partition)
       end)
 
-    {:array.from_list(h_buckets), hash_map}
+    {:array.from_list(h_partitions), hash_map}
   end
 
 
@@ -106,7 +106,7 @@ defmodule Algorithms.ConsistentHashing do
     keys = Enum.map(1..n_keys, &("key" <> to_string(&1)))
     buckets = Enum.map(1..n_buckets, &("bucket" <> to_string(&1)))
 
-    {h_buckets, hash_map} = prepare_buckets(buckets, h_func)
+    {h_buckets, hash_map} = prepare_partitions(buckets, h_func)
     Algorithms.ConsistentHashing.find_many(keys, h_buckets, hash_map, h_func)
   end
 

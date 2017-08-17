@@ -1,7 +1,7 @@
-defmodule KV.Bucket.Supervisor do
+defmodule KV.Partition.Supervisor do
   use Supervisor
 
-  @name KV.Bucket.Supervisor
+  @name KV.Partition.Supervisor
 
   def start_link do
     Supervisor.start_link(__MODULE__, :ok, name: @name)
@@ -10,14 +10,14 @@ defmodule KV.Bucket.Supervisor do
 
   def init(:ok) do
     children = [
-      worker(KV.Bucket, [], restart: :temporary)
+      worker(KV.Partition, [], restart: :temporary)
     ]
 
     supervise(children, strategy: :simple_one_for_one)
   end
 
 
-  def start_bucket do
+  def start_partition do
     Supervisor.start_child(@name, [])
   end
 end

@@ -1,15 +1,15 @@
 defmodule Algorithms.CHAnalysis do
   import ExProf.Macro
 
-  def analyze(n_keys, n_buckets) do
+  def analyze(n_keys, n_partitions) do
     h_func = fn val -> :erlang.phash2(val, 4_294_967_296) end
     keys = Enum.map(1..n_keys, &("key" <> to_string(&1)))
-    buckets = Enum.map(1..n_buckets, &("bucket" <> to_string(&1)))
+    partitions = Enum.map(1..n_partitions, &("partition" <> to_string(&1)))
 
-    {h_buckets, hash_map} = Algorithms.ConsistentHashing.prepare_buckets(buckets, h_func)
+    {h_partitions, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(partitions, h_func)
 
     _ = profile do
-      Algorithms.ConsistentHashing.find_many(keys, h_buckets, hash_map, h_func)
+      Algorithms.ConsistentHashing.find_many(keys, h_partitions, hash_map, h_func)
     end
     {:ok}
 
@@ -37,19 +37,19 @@ defmodule Algorithms.CHAnalysis do
     {:ok}
   end
 
-  def map_perf(n_buckets) do
+  def map_perf(n_partitions) do
     #keys = Enum.map(1..n_keys, &(:erlang.phash2("key" <> to_string(&1))))
 
-    #buckets = Enum.map(1..n_buckets, &()&1, :erlang.phash2("bucket" <> to_string(&1))))
+    #partitions = Enum.map(1..n_partitions, &()&1, :erlang.phash2("partition" <> to_string(&1))))
 
-    bucket_map = Enum.map(1..n_buckets, &{&1, :erlang.phash2("bucket" <> to_string(&1))})
+    partition_map = Enum.map(1..n_partitions, &{&1, :erlang.phash2("partition" <> to_string(&1))})
     |> Enum.reduce(%{},
-    fn {idx, bucket}, acc ->
-      Map.put(acc, idx, bucket)
+    fn {idx, partition}, acc ->
+      Map.put(acc, idx, partition)
     end)
 
     _ = profile do
-      1..n_buckets |> Enum.map(&Map.get(bucket_map, &1))
+      1..n_partitions |> Enum.map(&Map.get(partition_map, &1))
     end
     {:ok}
   end

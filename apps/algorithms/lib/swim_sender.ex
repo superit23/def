@@ -1,10 +1,28 @@
-defmodule Algorithms.Swim do
-
+defmodule Algorithms.Swim.Sender do
   @behaviour :gen_statem
+
+  @doc """
+  BOTH NODES
+  {:ok, _framework} = Services.Framework.start_link(
+   %{discovery: [{Discovery.Nop, nil, %{nodes: ["foo@kali",
+   "bar@kali"] }}],
+   services: [], poll_interval: 500})
+  Services.Framework.run
+  {:ok, mnesia} = Services.Registry.Mnesia.start_link
+  {:ok, swim} = Algorithms.Swim.Sender.start_link
+  {:ok, recv} = Algorithms.Swim.Receiver.start_link
+
+  NODE A
+  Services.Registry.register_name(mnesia, "barswim", recv)
+
+  NODE B
+  barswim = Services.Registry.whereis_name(mnesia, "barswim")
+  Algorithms.Swim.join(swim, barswim)
+  """
 
   defmacro __using__(_opts) do
     quote do
-      import Algorithms.Swim
+      import Algorithms.Swim.Sender
     end
   end
 
@@ -32,19 +50,6 @@ defmodule Algorithms.Swim do
   def callback_mode do
     :handle_event_function
   end
-
-
-  def join(pid, new_member) do
-    :gen_statem.cast(pid, {:join, new_member})
-  end
-
-
-  def get_status(pid) do
-    :gen_statem.call(pid, :get_status)
-  end
-
-
-  ## Failure detection
 
   def handle_event(:timeout, _time, :member, data) do
     IO.puts "Entering :timeout"
@@ -75,7 +80,7 @@ defmodule Algorithms.Swim do
       to_ping = Enum.random(data.members)
 
       _result = try do
-        :gen_statem.call(to_ping, {:recv_ping, self()}, 500)
+        GenServer.call(to_ping, {:recv_ping, self()}, 500)
         #:gen_statem.cast(to_ping, :wait)
       catch
         :exit, _reason ->
@@ -90,16 +95,7 @@ defmodule Algorithms.Swim do
   end
 
 
-  def handle_event({:call, from}, {:recv_ping, sender}, :member, data) do
-    IO.puts "Entering :recv_ping"
-    data = if Enum.member?(data.members, sender) do
-      data
-    else
-      %{data | members: [sender] ++ data.members}
-    end
-#, {:next_event, :cast, :wait}
-    {:keep_state, data, [{:reply, from, :pong}]}
-  end
+
 
 
   def handle_event({:call, from}, {:proxy_ping, to_ping}, :member, data) do
@@ -111,5 +107,4 @@ defmodule Algorithms.Swim do
     end
     {:keep_state, data, 500, [{:reply, from, result}]}
   end
-
 end

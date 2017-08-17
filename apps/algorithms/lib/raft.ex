@@ -1,5 +1,17 @@
 defmodule Algorithms.Raft do
 
+  @doc """
+  {:ok, _framework} = Services.Framework.start_link(
+    %{discovery: [{Discovery.Nop, nil, %{nodes: ["foo@kali",
+    "bar@kali"] }}],
+    services: [], poll_interval: 500})
+
+  Services.Framework.run
+  {:ok, commit} = Storage.Ets.start_link
+  {:ok, cache} = Storage.Ets.start_link
+  {:ok, raft} = Algorithms.Raft.start_link(commit, cache)
+  """
+
   @behaviour :gen_statem
   @election_timeout_min 1_000
   @election_timeout_max 1_500
