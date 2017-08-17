@@ -25,7 +25,12 @@ defmodule KV.Registry do
   Creates a partition for the given table.
   """
   def create(registry, partition) do
-    GenServer.call(registry, {:create, partition})
+    GenServer.call(registry, {:create, partition, "partition", []})
+  end
+
+
+  def create_bucket(registry, bucket, num_partitions, replication_factor, router) do
+    GenServer.call(registry, {:create, bucket, "bucket", {num_partitions, replication_factor, router}})
   end
 
 
@@ -47,11 +52,17 @@ defmodule KV.Registry do
 
   ## GenServer calls
 
-  def handle_call({:create, partition}, _from, {table, refs}) do
+  def handle_call({:create, partition, type, args}, _from, {table, refs}) do
     case lookup!(table, partition) do
       {:ok, pid} -> {:reply, pid, {table, refs}}
       :error ->
-        {:ok, pid} = KV.Partition.Supervisor.start_partition
+        {:ok, pid} = if type == "partition" do
+          KV.Partition.Supervisor.start_partition
+        else
+          {num_partitions, replication_factor, router} = args
+          KV.Bucket.Supervisor.start_bucket(partition, num_partitions, replication_factor, router)
+        end
+
 
         ref = Process.monitor(pid)
         refs = Map.put(refs, ref, partition)

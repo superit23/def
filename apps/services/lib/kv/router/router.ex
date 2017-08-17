@@ -11,12 +11,14 @@ defmodule KV.Router do
   Services.Framework.run
   {:ok, proc_registry} = Services.Registry.Mnesia.start_link
   {:ok, part_registry_super} = KV.Registry.Supervisor.start_link
+  KV.Bucket.Supervisor.start_link
   part_registry = elem(Enum.at(Supervisor.which_children(part_registry_super), 1), 1)
   Services.Registry.register_name(proc_registry, to_string(node()) <> ".KV.Registry", part_registry)
   {:ok, router} = KV.Router.start_link(proc_registry)
 
   ONE NODE
-  KV.Router.create_partition(router, "bucketbois")
+  {:ok, bucket} = KV.Router.create_bucket(router, "bucket_test", 6, 3)
+  {:ok, bucket} = KV.Bucket.start_link("bucket_test", 6, 3, router)
   """
 
   def start_link(proc_registry) do
@@ -30,12 +32,17 @@ defmodule KV.Router do
 
 
   def create_partition(pid, partition) do
-    GenServer.call(pid, {:create, partition})
+    GenServer.call(pid, {:create_partition, partition})
   end
 
 
   def lookup_partition(pid, partition) do
-    GenServer.call(pid, {:lookup, partition})
+    GenServer.call(pid, {:lookup_partition, partition})
+  end
+
+
+  def create_bucket(pid, bucket, num_partitions, replication_factor) do
+    GenServer.call(pid, {:create_bucket, bucket, num_partitions, replication_factor})
   end
 
 
@@ -51,7 +58,7 @@ defmodule KV.Router do
   end
 
 
-  def handle_call({:create, partition}, _from, {proc_registry, partitions}) do
+  def handle_call({:create_partition, partition}, _from, {proc_registry, partitions}) do
     assigned_node = get_assigned_node(partition)
 
     remote_registry = Services.Registry.whereis_name(
@@ -63,7 +70,7 @@ defmodule KV.Router do
   end
 
 
-  def handle_call({:lookup, partition}, _from, {proc_registry, partitions}) do
+  def handle_call({:lookup_partition, partition}, _from, {proc_registry, partitions}) do
     assigned_node = get_assigned_node(partition)
 
     remote_registry = Services.Registry.whereis_name(
@@ -71,6 +78,17 @@ defmodule KV.Router do
 
     pid = KV.Registry.lookup_call!(remote_registry, partition)
 
+    {:reply, {assigned_node, pid}, {proc_registry, partitions}}
+  end
+
+
+  def handle_call({:create_bucket, bucket, num_partitions, replication_factor}, _from, {proc_registry, partitions}) do
+    assigned_node = get_assigned_node(bucket)
+
+    remote_registry = Services.Registry.whereis_name(
+      proc_registry, assigned_node <> ".KV.Registry")
+
+    pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor, self())
     {:reply, {assigned_node, pid}, {proc_registry, partitions}}
   end
 
