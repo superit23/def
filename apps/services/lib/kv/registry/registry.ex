@@ -4,7 +4,7 @@ defmodule KV.Registry do
   ## GenServer controls
 
   def start_link(table_name) do
-    GenServer.start_link(__MODULE__, table_name, name: table_name)
+    GenServer.start_link(__MODULE__, table_name) #, name: table_name
   end
 
 
@@ -39,7 +39,8 @@ defmodule KV.Registry do
     end
   end
 
-  def lookup!(registry, partition) do
+
+  def lookup_call!(registry, partition) do
     GenServer.call(registry, {:lookup, partition})
   end
 
@@ -59,6 +60,7 @@ defmodule KV.Registry do
         {:reply, pid, {table, refs}}
       end
   end
+
 
   def handle_call({:lookup, partition}, _from, {table, refs}) do
     {:reply, lookup!(table, partition), {table, refs}}
