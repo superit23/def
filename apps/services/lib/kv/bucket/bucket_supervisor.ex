@@ -17,7 +17,7 @@ defmodule KV.Bucket.Supervisor do
   end
 
 
-  def start_bucket(name, num_partitions, replication_factor, router) do
-    Supervisor.start_child(@name, [name, num_partitions, replication_factor, router])
+  def start_bucket(name, num_partitions, replication_factor) do
+    Supervisor.start_child(@name, [name, num_partitions, replication_factor])
   end
 end

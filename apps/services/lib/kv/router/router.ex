@@ -17,7 +17,7 @@ defmodule KV.Router do
   {:ok, router} = KV.Router.start_link(proc_registry)
 
   ONE NODE
-  {:ok, bucket} = KV.Router.create_bucket(router, "bucket_test", 6, 3)
+  {assigned_node, bucket} = KV.Router.create_bucket(proc_registry, "bucket_test", 6, 3)
   {:ok, bucket} = KV.Bucket.start_link("bucket_test", 6, 3, router)
   """
 
@@ -31,46 +31,17 @@ defmodule KV.Router do
   end
 
 
-  def create_partition(pid, partition) do
-    GenServer.call(pid, {:create_partition, partition})
-  end
-
-
-  def lookup_partition(pid, partition) do
-    GenServer.call(pid, {:lookup_partition, partition})
-  end
-
-
-  def create_bucket(pid, bucket, num_partitions, replication_factor) do
-    GenServer.call(pid, {:create_bucket, bucket, num_partitions, replication_factor})
-  end
-
-
-  defp get_assigned_node(partition) do
-    h_func = fn val -> :erlang.phash2(val) end
-    {h_nodes, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
-       Enum.map([node()] ++ Node.list, fn node -> to_string(node) end), h_func)
-
-    [{^partition, assigned_node}] = Algorithms.ConsistentHashing.find(
-      partition, h_nodes, hash_map, h_func)
-
-      assigned_node
-  end
-
-
-  def handle_call({:create_partition, partition}, _from, {proc_registry, partitions}) do
+  def create_partition(proc_registry, partition) do
     assigned_node = get_assigned_node(partition)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
 
-    pid = KV.Registry.create(remote_registry, partition)
-
-    {:reply, {assigned_node, pid}, {proc_registry, [partition] ++ partitions}}
+    {assigned_node, KV.Registry.create(remote_registry, partition)}
   end
 
 
-  def handle_call({:lookup_partition, partition}, _from, {proc_registry, partitions}) do
+  def lookup(proc_registry, partition) do
     assigned_node = get_assigned_node(partition)
 
     remote_registry = Services.Registry.whereis_name(
@@ -78,19 +49,42 @@ defmodule KV.Router do
 
     pid = KV.Registry.lookup_call!(remote_registry, partition)
 
-    {:reply, {assigned_node, pid}, {proc_registry, partitions}}
+    {assigned_node, pid}
   end
 
 
-  def handle_call({:create_bucket, bucket, num_partitions, replication_factor}, _from, {proc_registry, partitions}) do
+  def create_bucket(proc_registry, bucket, num_partitions, replication_factor) do
     assigned_node = get_assigned_node(bucket)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
 
-    pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor, self())
-    {:reply, {assigned_node, pid}, {proc_registry, partitions}}
+    pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor)
+    KV.Bucket.init_partitions(pid, proc_registry)
+    {assigned_node, pid}
   end
+
+
+  defp get_assigned_node(partition) do
+    h_func = fn val -> :erlang.phash2(val) end
+
+    node_partitions = Enum.map([node()] ++ Node.list,
+    fn node ->
+      Enum.map(1..32,
+      fn x ->
+        to_string(node) <> "$" <> to_string(x)
+      end)
+    end) |> List.flatten
+
+    {h_nodes, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
+       node_partitions, h_func)
+
+    [{^partition, assigned_node}] = Algorithms.ConsistentHashing.find(
+      partition, h_nodes, hash_map, h_func)
+
+      Enum.at(String.split(assigned_node, "$"), 0)
+  end
+
 
 
 end

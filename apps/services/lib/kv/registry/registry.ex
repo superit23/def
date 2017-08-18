@@ -29,8 +29,8 @@ defmodule KV.Registry do
   end
 
 
-  def create_bucket(registry, bucket, num_partitions, replication_factor, router) do
-    GenServer.call(registry, {:create, bucket, "bucket", {num_partitions, replication_factor, router}})
+  def create_bucket(registry, bucket, num_partitions, replication_factor) do
+    GenServer.call(registry, {:create, bucket, "bucket", {num_partitions, replication_factor}})
   end
 
 
@@ -59,8 +59,8 @@ defmodule KV.Registry do
         {:ok, pid} = if type == "partition" do
           KV.Partition.Supervisor.start_partition
         else
-          {num_partitions, replication_factor, router} = args
-          KV.Bucket.Supervisor.start_bucket(partition, num_partitions, replication_factor, router)
+          {num_partitions, replication_factor} = args
+          KV.Bucket.Supervisor.start_bucket(partition, num_partitions, replication_factor)
         end
 
 
