@@ -18,7 +18,8 @@ defmodule KV.Router do
 
   ONE NODE
   {assigned_node, bucket} = KV.Router.create_bucket(proc_registry, "bucket_test", 6, 3)
-  {:ok, bucket} = KV.Bucket.start_link("bucket_test", 6, 3, router)
+  KV.Bucket.write(bucket, {"key", "value"})
+  KV.Bucket.lookup(bucket, "key")
   """
 
   def start_link(proc_registry) do
@@ -32,7 +33,8 @@ defmodule KV.Router do
 
 
   def create_partition(proc_registry, partition) do
-    assigned_node = get_assigned_node(partition)
+    #assigned_node = get_assigned_node(partition)
+    assigned_node = get_assigned_part([node()] ++ Node.list, partition)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
@@ -47,7 +49,7 @@ defmodule KV.Router do
 
 
   def lookup(proc_registry, name) do
-    assigned_node = get_assigned_node(name)
+    assigned_node = get_assigned_part([node()] ++ Node.list, name)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
@@ -59,7 +61,7 @@ defmodule KV.Router do
 
 
   def create_bucket(proc_registry, bucket, num_partitions, replication_factor) do
-    assigned_node = get_assigned_node(bucket)
+    assigned_node = get_assigned_part([node()] ++ Node.list, bucket)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
@@ -86,24 +88,38 @@ defmodule KV.Router do
   end
 
 
-  defp get_assigned_node(partition) do
+  def get_assigned_part(list, item) do
     h_func = fn val -> :erlang.phash2(val) end
 
-    node_partitions = Enum.map([node()] ++ Node.list,
-    fn node ->
+    list_partitions = Enum.map(list,
+    fn list_item ->
       Enum.map(1..32,
       fn x ->
-        to_string(node) <> "$" <> to_string(x)
+        to_string(list_item) <> "$" <> to_string(x)
       end)
     end) |> List.flatten
 
-    {h_nodes, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
-       node_partitions, h_func)
+    # node_partitions = Enum.map([node()] ++ Node.list,
+    # fn node ->
+    #   Enum.map(1..32,
+    #   fn x ->
+    #     to_string(node) <> "$" <> to_string(x)
+    #   end)
+    # end) |> List.flatten
 
-    [{^partition, assigned_node}] = Algorithms.ConsistentHashing.find(
-      partition, h_nodes, hash_map, h_func)
+    # {h_nodes, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
+    #    node_partitions, h_func)
 
-      Enum.at(String.split(assigned_node, "$"), 0)
+    {h_list, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
+       list_partitions, h_func)
+
+    # [{^partition, assigned_node}] = Algorithms.ConsistentHashing.find(
+    #   partition, h_nodes, hash_map, h_func)
+
+    [{^item, assigned_part}] = Algorithms.ConsistentHashing.find(
+      item, h_list, hash_map, h_func)
+
+      Enum.at(String.split(assigned_part, "$"), 0)
   end
 
 
