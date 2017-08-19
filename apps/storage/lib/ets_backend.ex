@@ -22,8 +22,8 @@ defmodule Storage.Ets do
   end
 
 
-  def handle_call({:delete, keyvalue}, _from, commit_table) do
-    success = :ets.delete(commit_table, keyvalue)
+  def handle_call({:delete, key}, _from, commit_table) do
+    success = :ets.delete(commit_table, key)
     {:reply, success, commit_table}
   end
 

@@ -9,7 +9,7 @@ defmodule Algorithms.Raft do
   Services.Framework.run
   {:ok, commit} = Storage.Ets.start_link
   {:ok, cache} = Storage.Ets.start_link
-  {:ok, raft} = Algorithms.Raft.start_link(commit, cache)
+  {:ok, raft} = Algorithms.Raft.start_link(commit, cache, "raft_group")
   """
 
   @behaviour :gen_statem
@@ -19,13 +19,12 @@ defmodule Algorithms.Raft do
   @heartbeat_freq 500
 
   ## Public API
-  def start_link(commit_storage, cache_storage) do
-    :gen_statem.start_link(__MODULE__, {commit_storage, cache_storage}, [])
+  def start_link(commit_storage, cache_storage, group_name) do
+    :gen_statem.start_link(__MODULE__, {commit_storage, cache_storage, group_name}, [])
   end
 
 
   def get_status(pid) do
-    # :gen_statem.call(:global.whereis_name(to_string(node()) <> ".Raft"), :get_status)
     :gen_statem.call(pid, :get_status)
   end
 
@@ -51,9 +50,13 @@ defmodule Algorithms.Raft do
   end
 
 
-  def init({commit_storage, cache_storage}) do
-    :global.register_name(to_string(node()) <> ".Raft", self())
-    {:ok, :follower, %State{write_cache: cache_storage, storage: commit_storage, write_tick: 0, voted_for: nil, term: 0}, [{:next_event, :cast, :wait}]}
+  def init({commit_storage, cache_storage, group_name}) do
+    #:global.register_name(to_string(node()) <> ".Raft", self())
+    :ok = :pg2.create({:raft, group_name})
+    :ok = :pg2.join({:raft, group_name}, self())
+    {:ok, :follower,
+      %State{write_cache: cache_storage, storage: commit_storage, write_tick: 0,
+       voted_for: nil, term: 0, group_name: group_name}, [{:next_event, :cast, :wait}]}
   end
 
 
@@ -85,8 +88,9 @@ defmodule Algorithms.Raft do
     entries = Storage.Backend.lookup(data.write_cache, data.write_tick)
 
     ## Always send entries as a type of heartbeat
-    for node <- Services.Framework.nodes do
-      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{tick: data.append_tick, entries: entries, leader: self(), term: data.term}})
+    for pid <- :pg2.get_members({:raft, data.group_name}) -- [self()] do
+      #:gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:append_entries, %{tick: data.append_tick, entries: entries, leader: self(), term: data.term}})
+      :gen_statem.cast(pid, {:append_entries, %{tick: data.append_tick, entries: entries, leader: self(), term: data.term}})
     end
 
     data =
@@ -118,18 +122,22 @@ defmodule Algorithms.Raft do
   def handle_event(:cast, :append_entries_confirm, :leader, data) do
     data = %{data | num_confirms: data.num_confirms + 1}
 
+    members = :pg2.get_members({:raft, data.group_name}) -- [self()]
+
     data =
-      if data.num_confirms > Enum.count(Services.Framework.nodes) / 2 do
+      if data.num_confirms > (Enum.count(members) + 1) / 2 do
         Storage.Backend.lookup(data.write_cache, data.append_tick)
           |> Enum.at(0)
           |> elem(1)
           |> Enum.each(&Storage.Backend.write(data.storage, &1))
 
-        for node <- Services.Framework.nodes do
-          :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:commit_entries, %{tick: data.append_tick}})
+
+        for pid <- members do
+          #:gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:commit_entries, %{tick: data.append_tick}})
+          :gen_statem.cast(pid, {:commit_entries, %{tick: data.append_tick}})
         end
 
-        %{data | append_tick: data.append_tick + 1}
+        %{data | append_tick: data.append_tick + 1, num_confirms: 0}
       else
         data
       end
@@ -153,17 +161,28 @@ defmodule Algorithms.Raft do
   end
 
 
+  ## LEADER SOFT-INVALID STATES
+
+  def handle_event(:cast, {:vote, %{vote: _voted_for_me, term: _received_term}}, :leader, data) do
+    # Send entries to help notify nodes of the leader.
+    {:keep_state, data, [{:next_event, :cast, :send_entries}]}
+  end
+
+
 
   ## Candidate
 
   def handle_event(:cast, :request_vote, :candidate, data) do
     data = %{data | current: :candidate}
 
-    for node <- Services.Framework.nodes do
-      :gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:receive_vote_req, %{term: data.term, sender: self(), node: to_string(node())}})
+    members = :pg2.get_members({:raft, data.group_name}) -- [self()]
+
+    for pid <- members do
+      #:gen_statem.cast(:global.whereis_name(to_string(node) <> ".Raft"), {:receive_vote_req, %{term: data.term, sender: self(), node: to_string(node())}})
+      :gen_statem.cast(pid, {:receive_vote_req, %{term: data.term, sender: self(), node: to_string(node())}})
     end
 
-    if Enum.count(Services.Framework.nodes) == 0 do
+    if Enum.count(members) == 0 do
       data = %{data | votes_for_me: 0, total_votes: 0}
       {:next_state, :leader, data, [{:next_event, :cast, :send_entries}]}
     else
@@ -195,7 +214,7 @@ defmodule Algorithms.Raft do
         data
       end
 
-    num_nodes = Enum.count(Services.Framework.nodes) + 1
+    num_nodes = Enum.count(:pg2.get_members({:raft, data.group_name}))
 
     cond do
       data.votes_for_me > num_nodes / 2 ->
@@ -210,14 +229,27 @@ defmodule Algorithms.Raft do
         {:keep_state, data, rand_election_time()}
     end
 
-
   end
-
 
   def handle_event(:timeout, _time, :candidate, data) do
     data = %{data | votes_for_me: 0, total_votes: 0}
     {:next_state, :follower, data,[{:next_event, :cast, :wait}]}
   end
+
+
+  # CANDIDATE SOFT-INVALID STATES
+
+  # This is a soft-invalid state. We want to discard the request and return to
+  # normal function.
+  def handle_event(:cast, {:receive_vote_req, _vote_request}, :candidate, data) do
+    {:keep_state, data, rand_election_time()}
+  end
+
+
+  def handle_event(:cast, {:append_entries, msg}, :candidate, data) do
+    {:next_state, :follower, data, [{:next_event, :cast, {:append_entries, msg}}]}
+  end
+
 
 
   ## Follower

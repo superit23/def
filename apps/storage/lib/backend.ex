@@ -10,8 +10,8 @@ defmodule Storage.Backend do
   end
 
 
-  def delete(pid, keyvalue) do
-    GenServer.call(pid, {:delete, keyvalue})
+  def delete(pid, key) do
+    GenServer.call(pid, {:delete, key})
   end
 
 

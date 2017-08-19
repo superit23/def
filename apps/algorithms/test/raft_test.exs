@@ -12,7 +12,7 @@ defmodule Algorithms.Raft.Test do
     Services.Framework.run
     {:ok, commit} = Storage.Ets.start_link
     {:ok, cache} = Storage.Ets.start_link
-    {:ok, raft} = Algorithms.Raft.start_link(commit, cache)
+    {:ok, raft} = Algorithms.Raft.start_link(commit, cache, "test")
     raft
   end
 
@@ -53,7 +53,7 @@ defmodule Algorithms.Raft.Test do
     Services.Framework.run
     {:ok, commit} = Storage.Ets.start_link
     {:ok, cache} = Storage.Ets.start_link
-    {:ok, raft} = Algorithms.Raft.start_link(commit, cache)
+    {:ok, raft} = Algorithms.Raft.start_link(commit, cache, "test")
 
     :timer.sleep(3_250)
 

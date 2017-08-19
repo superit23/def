@@ -37,17 +37,22 @@ defmodule KV.Router do
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
 
-    {assigned_node, KV.Registry.create(remote_registry, partition)}
+    #KV.Registry.create(remote_registry, partition)
+    pid = KV.Registry.create(remote_registry, partition, true, fn ->
+      KV.Partition.Supervisor.start_partition
+    end)
+
+    {assigned_node, pid}
   end
 
 
-  def lookup(proc_registry, partition) do
-    assigned_node = get_assigned_node(partition)
+  def lookup(proc_registry, name) do
+    assigned_node = get_assigned_node(name)
 
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
 
-    pid = KV.Registry.lookup_call!(remote_registry, partition)
+    pid = KV.Registry.lookup_call!(remote_registry, name)
 
     {assigned_node, pid}
   end
@@ -59,9 +64,25 @@ defmodule KV.Router do
     remote_registry = Services.Registry.whereis_name(
       proc_registry, assigned_node <> ".KV.Registry")
 
-    pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor)
+    #pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor)
+    pid = KV.Registry.create(remote_registry, bucket, true, fn ->
+      KV.Bucket.Supervisor.start_bucket(bucket, num_partitions, replication_factor)
+    end)
+
     KV.Bucket.init_partitions(pid, proc_registry)
     {assigned_node, pid}
+  end
+
+
+  def create_raft(proc_registry, part_string, assigned_node, pid) do
+    remote_registry = Services.Registry.whereis_name(
+      proc_registry, assigned_node <> ".KV.Registry")
+
+    KV.Registry.create(remote_registry, part_string, false, fn ->
+      {:ok, cache} = Storage.Ets.start_link
+      {:ok, commit} = Storage.Partition.start_link(pid)
+      Algorithms.Raft.start_link(commit, cache, part_string)
+    end)
   end
 
 
