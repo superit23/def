@@ -30,15 +30,6 @@ defmodule KV.Bucket do
       end)
       |> Enum.into(%{})
 
-    # raft_instances = Enum.map(0..num_partitions, fn part_num ->
-    #     Enum.map(0..replication_factor, fn rep_num ->
-    #       part_string = name <> "_part_" <> to_string(part_num)
-    #       {assigned_node, pid} = KV.Router.create_partition(proc_registry, part_string <> "_rep_" <> to_string(rep_num))
-    #
-    #       KV.Router.create_raft(proc_registry, part_string, assigned_node, pid)
-    #      end)
-    #    end)
-
     {:reply, :ok, {name, part_raft_map, num_partitions, replication_factor}}
   end
 
@@ -66,6 +57,18 @@ defmodule KV.Bucket do
   end
 
 
+  # TODO: This doesn't have coordination. This needs to be consistent.
+  def handle_call({:delete, key}, _from, {name, part_raft_map, num_partitions, replication_factor}) do
+    assigned_part = KV.Router.get_assigned_part(Map.keys(part_raft_map), key)
+    raft_state = Map.get(part_raft_map, assigned_part)
+      |> Enum.at(0)
+      |> Algorithms.Raft.get_status
+
+    value = raft_state.storage
+      |> Storage.Backend.delete(key)
+    {:reply, value, {name, part_raft_map, num_partitions, replication_factor}}
+  end
+
 
   def write(bucket, keyvalue) do
     GenServer.call(bucket, {:write, keyvalue})
@@ -74,6 +77,11 @@ defmodule KV.Bucket do
 
   def lookup(bucket, key) do
     GenServer.call(bucket, {:lookup, key})
+  end
+
+
+  def delete(bucket, key) do
+    GenServer.call(bucket, {:delete, key})
   end
 
 

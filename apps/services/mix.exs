@@ -18,7 +18,7 @@ defmodule Services.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :maru]]
   end
 
   # Dependencies can be Hex packages:
@@ -35,6 +35,6 @@ defmodule Services.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    []
+    [{:maru, "~> 0.12.3"}]
   end
 end

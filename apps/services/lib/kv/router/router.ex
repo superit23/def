@@ -23,12 +23,21 @@ defmodule KV.Router do
   """
 
   def start_link(proc_registry) do
-    GenServer.start_link(__MODULE__, proc_registry)
+    GenServer.start_link(__MODULE__, proc_registry, name: KV.Router)
   end
 
 
   def init(proc_registry) do
     {:ok, {proc_registry, []}}
+  end
+
+
+  def get_state do
+    GenServer.call(KV.Router, :get_state)
+  end
+
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
   end
 
 
@@ -99,22 +108,10 @@ defmodule KV.Router do
       end)
     end) |> List.flatten
 
-    # node_partitions = Enum.map([node()] ++ Node.list,
-    # fn node ->
-    #   Enum.map(1..32,
-    #   fn x ->
-    #     to_string(node) <> "$" <> to_string(x)
-    #   end)
-    # end) |> List.flatten
-
-    # {h_nodes, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
-    #    node_partitions, h_func)
 
     {h_list, hash_map} = Algorithms.ConsistentHashing.prepare_partitions(
        list_partitions, h_func)
 
-    # [{^partition, assigned_node}] = Algorithms.ConsistentHashing.find(
-    #   partition, h_nodes, hash_map, h_func)
 
     [{^item, assigned_part}] = Algorithms.ConsistentHashing.find(
       item, h_list, hash_map, h_func)
