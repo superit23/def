@@ -61,7 +61,7 @@ defmodule KV.Router.Api do
               delete do
                 {proc_registry, _array} = KV.Router.get_state
                 {_assigned_node, {:ok, bucket}} = KV.Router.lookup(proc_registry, params[:name])
-                value = KV.Bucket.delete(bucket, params[:key])
+                _value = KV.Bucket.delete(bucket, params[:key])
 
                 json(conn, %{success: true})
               end
@@ -78,7 +78,9 @@ defmodule KV.Router.Api do
 
       post do
         {proc_registry, _array} = KV.Router.get_state
-        {_assigned_node, bucket} = KV.Router.create_bucket(proc_registry, params[:name], 6, 3)
+        {_assigned_node, bucket} = KV.Router.create_bucket(
+          proc_registry, params[:name], params[:num_partitions], params[:replication_factor])
+
         state = KV.Bucket.get_state(bucket)
 
         json(conn, %{name: elem(state, 0), num_partitions: elem(state, 2), replication_factor: elem(state, 3)})

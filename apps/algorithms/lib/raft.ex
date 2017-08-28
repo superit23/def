@@ -169,6 +169,11 @@ defmodule Algorithms.Raft do
   end
 
 
+  def handle_event(:cast, {:receive_vote_req, _vote_request}, :leader, data) do
+    {:keep_state, data, [{:next_event, :cast, :send_entries}]}
+  end
+
+
 
   ## Candidate
 

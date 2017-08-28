@@ -21,7 +21,12 @@ use Mix.Config
 #     config :logger, level: :info
 #
 
-config :maru, Services.Api, http: [port: 8080]
+config :maru, Services.Api,
+  http: [port: (if System.get_env("API_PORT") != nil do
+    System.get_env("API_PORT")
+  else
+    rem(:erlang.phash2(to_string(node())), 1000) + 8000
+  end)]
 
 # It is also possible to import configuration files, relative to this
 # directory. For example, you can emulate configuration per environment
