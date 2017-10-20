@@ -1,4 +1,4 @@
-defmodule KV.Registry.Supervisor do
+defmodule Services.Registry.Local.Evaluator.Supervisor do
   use Supervisor
 
   def start_link do
@@ -7,7 +7,7 @@ defmodule KV.Registry.Supervisor do
 
   def init(:ok) do
     children = [
-      worker(KV.Registry, [KV.Registry]),
+      worker(Services.Registry.Local.Evaluator, [Services.Registry.Local.Evaluator]),
       supervisor(KV.Partition.Supervisor, [])
     ]
 

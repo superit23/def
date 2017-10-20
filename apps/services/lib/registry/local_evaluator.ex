@@ -1,4 +1,4 @@
-defmodule KV.Registry do
+defmodule Services.Registry.Local.Evaluator do
   use GenServer
 
   ## GenServer controls
@@ -25,8 +25,8 @@ defmodule KV.Registry do
   Creates a partition for the given table.
   """
 
-  def create(registry, name, should_register, func) do
-    GenServer.call(registry, {:create, name, should_register, func})
+  def register_name(registry, name, func) do
+    GenServer.call(registry, {:register_name, name, func})
   end
 
   # def create(registry, partition) do
@@ -51,53 +51,46 @@ defmodule KV.Registry do
 
 
   def lookup_call!(registry, partition) do
-    GenServer.call(registry, {:lookup, partition})
+    GenServer.call(registry, {:whereis_name, partition})
   end
 
 
   ## GenServer calls
 
-  # def handle_call({:create, partition, type, args}, _from, {table, refs}) do
-  #   case lookup!(table, partition) do
-  #     {:ok, pid} -> {:reply, pid, {table, refs}}
-  #     :error ->
-  #       {:ok, pid} =
-  #         if type == "partition" do
-  #           KV.Partition.Supervisor.start_partition
-  #         else
-  #           {num_partitions, replication_factor} = args
-  #           KV.Bucket.Supervisor.start_bucket(partition, num_partitions, replication_factor)
-  #         end
-  #
-  #       ref = Process.monitor(pid)
-  #       refs = Map.put(refs, ref, partition)
-  #       :ets.insert(table, {partition, pid})
-  #
-  #       {:reply, pid, {table, refs}}
-  #     end
-  # end
-
   @doc """
-  Creates a process locally using a given `func` and registers it under the given `name` if `should_register`.
+  Creates a process locally using a given `func` and registers it under the given `name`.
   """
-  def handle_call({:create, name, should_register, func}, _from, {table, refs}) do
+  def handle_call({:register_name, name, func}, _from, {table, refs}) do
     case lookup!(table, name) do
       {:ok, pid} -> {:reply, pid, {table, refs}}
       :error ->
         {:ok, pid} = func.()
 
-        if should_register do
-          ref = Process.monitor(pid)
-          refs = Map.put(refs, ref, name)
-          :ets.insert(table, {name, pid})
-        end
+        ref = Process.monitor(pid)
+        refs = Map.put(refs, ref, name)
+        :ets.insert(table, {name, pid})
 
         {:reply, pid, {table, refs}}
       end
   end
+  # def handle_call({:create, name, should_register, func}, _from, {table, refs}) do
+  #   case lookup!(table, name) do
+  #     {:ok, pid} -> {:reply, pid, {table, refs}}
+  #     :error ->
+  #       {:ok, pid} = func.()
+  #
+  #       if should_register do
+  #         ref = Process.monitor(pid)
+  #         refs = Map.put(refs, ref, name)
+  #         :ets.insert(table, {name, pid})
+  #       end
+  #
+  #       {:reply, pid, {table, refs}}
+  #     end
+  # end
 
 
-  def handle_call({:lookup, partition}, _from, {table, refs}) do
+  def handle_call({:whereis_name, partition}, _from, {table, refs}) do
     {:reply, lookup!(table, partition), {table, refs}}
   end
 

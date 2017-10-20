@@ -73,11 +73,20 @@ defmodule Services.Framework do
        |> Enum.filter(&(&1 != to_string(node())))
        |> Enum.map(&(String.to_atom(&1)))
 
-    discovered_nodes -- state.nodes
-      |> Enum.each(&Node.connect &1)
+    successful_connections = discovered_nodes -- state.nodes
+      |> Enum.filter(&Node.connect &1)
+
+    successful_connections |> Enum.each(&:erlang.monitor_node &1)
 
     poll(state)
-    {:noreply, %{state | nodes: Enum.uniq(discovered_nodes ++ state.nodes), ticks: state.ticks + 1}}
+    {:noreply, %{state | nodes: Enum.uniq(successful_connections ++ state.nodes), ticks: state.ticks + 1}}
   end
+
+
+  def handle_info({:nodedown, node}, state) do
+    {:noreply, %{state | nodes: state.nodes -- node}}
+  end
+
+
 
 end

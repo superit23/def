@@ -9,11 +9,11 @@ defmodule KV.Router do
    "bar@kali"] }}],
    services: [], poll_interval: 500})
   Services.Framework.run
-  {:ok, proc_registry} = Services.Registry.Mnesia.start_link
-  {:ok, part_registry_super} = KV.Registry.Supervisor.start_link
+  {:ok, proc_registry} = Services.Registry.Global.Mnesia.start_link
+  {:ok, part_registry_super} = Services.Registry.Local.Evaluator.Supervisor.start_link
   KV.Bucket.Supervisor.start_link
   part_registry = elem(Enum.at(Supervisor.which_children(part_registry_super), 1), 1)
-  Services.Registry.register_name(proc_registry, to_string(node()) <> ".KV.Registry", part_registry)
+  Services.Registry.register_name(proc_registry, to_string(node()) <> ".Services.Registry.Local.Evaluator", part_registry)
   {:ok, router} = KV.Router.start_link(proc_registry)
 
   ONE NODE
@@ -46,10 +46,9 @@ defmodule KV.Router do
     assigned_node = get_assigned_part([node()] ++ Node.list, partition)
 
     remote_registry = Services.Registry.whereis_name(
-      proc_registry, assigned_node <> ".KV.Registry")
+      proc_registry, assigned_node <> ".Services.Registry.Local.Evaluator")
 
-    #KV.Registry.create(remote_registry, partition)
-    pid = KV.Registry.create(remote_registry, partition, true, fn ->
+    pid = Services.Registry.Local.Evaluator.register_name(remote_registry, partition, fn ->
       KV.Partition.Supervisor.start_partition
     end)
 
@@ -61,9 +60,9 @@ defmodule KV.Router do
     assigned_node = get_assigned_part([node()] ++ Node.list, name)
 
     remote_registry = Services.Registry.whereis_name(
-      proc_registry, assigned_node <> ".KV.Registry")
+      proc_registry, assigned_node <> ".Services.Registry.Local.Evaluator")
 
-    pid = KV.Registry.lookup_call!(remote_registry, name)
+    pid = Services.Registry.Local.Evaluator.lookup_call!(remote_registry, name)
 
     {assigned_node, pid}
   end
@@ -73,10 +72,9 @@ defmodule KV.Router do
     assigned_node = get_assigned_part([node()] ++ Node.list, bucket)
 
     remote_registry = Services.Registry.whereis_name(
-      proc_registry, assigned_node <> ".KV.Registry")
+      proc_registry, assigned_node <> ".Services.Registry.Local.Evaluator")
 
-    #pid = KV.Registry.create_bucket(remote_registry, bucket, num_partitions, replication_factor)
-    pid = KV.Registry.create(remote_registry, bucket, true, fn ->
+    pid = Services.Registry.Local.Evaluator.register_name(remote_registry, bucket, fn ->
       KV.Bucket.Supervisor.start_bucket(bucket, num_partitions, replication_factor)
     end)
 
@@ -87,9 +85,9 @@ defmodule KV.Router do
 
   def create_raft(proc_registry, part_string, assigned_node, pid) do
     remote_registry = Services.Registry.whereis_name(
-      proc_registry, assigned_node <> ".KV.Registry")
+      proc_registry, assigned_node <> ".Services.Registry.Local.Evaluator")
 
-    KV.Registry.create(remote_registry, part_string, false, fn ->
+    Services.Registry.Local.Evaluator.register_name(remote_registry, part_string, fn ->
       {:ok, cache} = Storage.Ets.start_link
       {:ok, commit} = Storage.Partition.start_link(pid)
       Algorithms.Raft.start_link(commit, cache, part_string)

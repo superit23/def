@@ -8,7 +8,7 @@ defmodule Algorithms.Swim.Sender do
    "bar@kali"] }}],
    services: [], poll_interval: 500})
   Services.Framework.run
-  {:ok, mnesia} = Services.Registry.Mnesia.start_link
+  {:ok, mnesia} = Services.Registry.Global.Mnesia.start_link
   {:ok, swim} = Algorithms.Swim.Sender.start_link
   {:ok, recv} = Algorithms.Swim.Receiver.start_link
 

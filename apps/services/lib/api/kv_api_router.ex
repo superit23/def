@@ -43,6 +43,7 @@ defmodule KV.Router.Api do
           {proc_registry, _array} = KV.Router.get_state
           {_assigned_node, {:ok, bucket}} = KV.Router.lookup(proc_registry, params[:name])
           KV.Bucket.write(bucket, {params[:key], params[:value]})
+          IO.puts "#{params[:name]} #{params[:key]} #{params[:value]}"
 
           json(conn, %{success: true})
         end

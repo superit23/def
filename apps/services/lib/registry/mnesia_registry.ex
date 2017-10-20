@@ -1,4 +1,4 @@
-defmodule Services.Registry.Mnesia do
+defmodule Services.Registry.Global.Mnesia do
 
   def start_link do
     GenServer.start_link(__MODULE__, :ok, [])

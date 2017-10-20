@@ -1,8 +1,8 @@
-defmodule Services.Registry.Mnesia.Test do
+defmodule Services.Registry.Global.Mnesia.Test do
   use ExUnit.Case, async: true
 
   test "all registry functions" do
-    {:ok, pid } = Services.Registry.Mnesia.start_link
+    {:ok, pid } = Services.Registry.Global.Mnesia.start_link
 
     assert Services.Registry.whereis_name(pid, "me") == nil
 
